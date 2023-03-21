@@ -9,38 +9,64 @@ import (
 type HandlerFunc func(*Context)
 
 // Engine implement the interface of ServeHTTP
-type Engine struct {
-	router *router
-}
+type (
+	RouterGroup struct {
+		prefix      string
+		middlewares []HandlerFunc // support middleware
+		parent      *RouterGroup  // support nesting
+		engine      *Engine       // all groups share a Engine instance
+	}
+
+	Engine struct {
+		*RouterGroup
+		router *router
+		groups []*RouterGroup // store all groups
+	}
+)
 
 // New is the constructor of gee.Engine
 func New() *Engine {
-	return &Engine{router: newRouter()}
+	engine := &Engine{router: newRouter()}
+	engine.RouterGroup = &RouterGroup{engine: engine}  // engine的RouterGroup
+	engine.groups = []*RouterGroup{engine.RouterGroup} // 其他RouterGroup
+	return engine
+}
+
+// Group is defined to create a new RouterGroup
+// remember all groups share the same Engine instance
+func (group *RouterGroup) Group(prefix string) *RouterGroup {
+	engine := group.engine
+	newGroup := &RouterGroup{
+		prefix: group.prefix + prefix,
+		parent: group,
+		engine: engine,
+	}
+	engine.groups = append(engine.groups, newGroup)
+	return newGroup
 }
 
 // HTTPServer启动前会注册监听的请求链接，并以前缀树路由表的形式
-func (engine *Engine) addRoute(method string, pattern string, handler HandlerFunc) {
+func (group *RouterGroup) addRoute(method string, comp string, handler HandlerFunc) {
+	pattern := group.prefix + comp
 	log.Printf("Route %4s - %s", method, pattern)
-	engine.router.addRoute(method, pattern, handler)
+	group.engine.router.addRoute(method, pattern, handler)
 }
 
 // GET defines the method to add GET request
-func (engine *Engine) GET(pattern string, handler HandlerFunc) {
-	engine.addRoute("GET", pattern, handler)
+func (group *RouterGroup) GET(pattern string, handler HandlerFunc) {
+	group.addRoute("GET", pattern, handler)
 }
 
 // POST defines the method to add POST request
-func (engine *Engine) POST(pattern string, handler HandlerFunc) {
-	engine.addRoute("POST", pattern, handler)
+func (group *RouterGroup) POST(pattern string, handler HandlerFunc) {
+	group.addRoute("POST", pattern, handler)
 }
 
 // Run defines the method to start a http server
-// 因为engine实现了ServeHTTP接口函数，所以启动HTTPServer时，请求会调用ServeHTTP方法
 func (engine *Engine) Run(addr string) (err error) {
 	return http.ListenAndServe(addr, engine)
 }
 
-// 每次HTTP请求会执行这个接口函数，会新创建一个context上下文，然后去路由表中解析请求地址，找到对应的handle方法并调用
 func (engine *Engine) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	c := newContext(w, req)
 	engine.router.handle(c)
