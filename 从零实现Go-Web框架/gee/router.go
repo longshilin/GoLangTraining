@@ -54,11 +54,9 @@ func (r *router) getRoute(method string, path string) (*node, map[string]string)
 		return nil, nil
 	}
 
-	n := root.search(searchParts, 0) // 传入的是请求地址，返回的是匹配到的路由node节点，是前缀树中的一个叶子节点
+	n := root.search(searchParts, 0)
 
 	if n != nil {
-		// 路由匹配到了前缀树的节点，意味着路由匹配成功，对应的该节点的信息解析其中模式匹配的参数：
-		// 如果是 :name 的方式，参数
 		parts := parsePattern(n.pattern)
 		for index, part := range parts {
 			if part[0] == ':' {
@@ -85,14 +83,18 @@ func (r *router) getRoutes(method string) []*node {
 	return nodes
 }
 
-// 传入一个连接，模式匹配到具体 [路由表-handler]， 然后执行handler
+// 查找路由表，将注册的业务处理handle拿到，保存到context的handlers中
 func (r *router) handle(c *Context) {
 	n, params := r.getRoute(c.Method, c.Path)
+
 	if n != nil {
-		c.Params = params
 		key := c.Method + "-" + n.pattern
-		r.handlers[key](c)
+		c.Params = params
+		c.handlers = append(c.handlers, r.handlers[key])
 	} else {
-		c.String(http.StatusNotFound, "404 NOT FOUND: %s\n", c.Path)
+		c.handlers = append(c.handlers, func(c *Context) {
+			c.String(http.StatusNotFound, "404 NOT FOUND: %s\n", c.Path)
+		})
 	}
+	c.Next()
 }
