@@ -1,0 +1,3 @@
+[submodule "learn-go-with-tests"]
+	path = learn-go-with-tests
+	url = git@github.com:quii/learn-go-with-tests.git
