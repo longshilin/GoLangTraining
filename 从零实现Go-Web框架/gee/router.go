@@ -83,7 +83,6 @@ func (r *router) getRoutes(method string) []*node {
 	return nodes
 }
 
-// 查找路由表，将注册的业务处理handle拿到，保存到context的handlers中
 func (r *router) handle(c *Context) {
 	n, params := r.getRoute(c.Method, c.Path)
 
